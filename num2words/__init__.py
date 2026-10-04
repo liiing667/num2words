@@ -94,7 +94,8 @@ CONVERTER_CLASSES = {
     'zh_TW': lang_ZH_TW.Num2Word_ZH_TW(),
 }
 
-CONVERTES_TYPES = ['cardinal', 'ordinal', 'ordinal_num', 'year', 'currency']
+CONVERTES_TYPES = ['cardinal', 'ordinal', 'ordinal_num', 'year', 'currency',
+                   'duration']
 
 
 def num2words(number, ordinal=False, lang='en', to='cardinal', **kwargs):

@@ -17,6 +17,8 @@
 
 from __future__ import unicode_literals
 
+from collections import OrderedDict
+
 from .base import Num2Word_Base
 from .utils import get_digits, splitbyx
 
@@ -273,10 +275,30 @@ class Num2Word_RU(Num2Word_Base):
         ),
     }
 
+    DURATION_UNITS = OrderedDict((
+        ('year', (31536000, ('год', 'года', 'лет'))),
+        ('month', (2592000, ('месяц', 'месяца', 'месяцев'))),
+        ('day', (86400, ('день', 'дня', 'дней'))),
+        ('hour', (3600, ('час', 'часа', 'часов'))),
+        ('minute', (60, ('минута', 'минуты', 'минут'))),
+        ('second', (1, ('секунда', 'секунды', 'секунд'))),
+    ))
+    DURATION_SUBSECOND_UNIT = ('миллисекунда', 'миллисекунды',
+                               'миллисекунд')
+    DURATION_AND_WORD = ''
+    DURATION_UNIT_GENDERS = {
+        'year': 'm', 'month': 'm', 'day': 'm', 'hour': 'm',
+        'minute': 'f', 'second': 'f', 'millisecond': 'f',
+    }
+
     def setup(self):
         self.negword = "минус"
         self.pointword = ('целая', 'целых', 'целых')
         self.pointword_ord = get_cases("цел", 1)
+
+    def _duration_cardinal(self, count, unit):
+        gender = self.DURATION_UNIT_GENDERS.get(unit, D_GENDER)
+        return self.to_cardinal(count, gender=gender)
 
     def to_cardinal(self, number, case=D_CASE, plural=D_PLURAL,
                     gender=D_GENDER, animate=D_ANIMATE):

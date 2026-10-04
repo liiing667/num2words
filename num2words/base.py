@@ -29,6 +29,28 @@ class Num2Word_Base(object):
     CURRENCY_FORMS = {}
     CURRENCY_ADJECTIVES = {}
 
+    # Duration units, ordered from largest to smallest, mapping a unit name
+    # to its length in seconds and its word forms (singular first, as
+    # expected by the language's pluralize()).
+    DURATION_UNITS = OrderedDict((
+        ('year', (31536000, ('year', 'years'))),
+        ('month', (2592000, ('month', 'months'))),
+        ('day', (86400, ('day', 'days'))),
+        ('hour', (3600, ('hour', 'hours'))),
+        ('minute', (60, ('minute', 'minutes'))),
+        ('second', (1, ('second', 'seconds'))),
+    ))
+    # Word forms used for sub-second values.
+    DURATION_SUBSECOND_UNIT = ('millisecond', 'milliseconds')
+    # How many sub-second units fit in one second.
+    DURATION_SUBSECOND_DIVISOR = 1000
+    # When True, sub-second values are rounded to whole seconds instead of
+    # being converted to DURATION_SUBSECOND_UNIT.
+    DURATION_SUBSECOND_IN_SECONDS = False
+    # Word used to join the last two duration segments. Falsy means the
+    # segments are simply joined with a space.
+    DURATION_AND_WORD = 'and'
+
     def __init__(self):
         self.is_title = False
         self.precision = 2
@@ -252,6 +274,75 @@ class Num2Word_Base(object):
 
     def to_year(self, value, **kwargs):
         return self.to_cardinal(value)
+
+    def _duration_cardinal(self, count, unit):
+        return self.to_cardinal(count)
+
+    def _duration_pluralize(self, count, forms):
+        try:
+            return self.pluralize(count, forms)
+        except NotImplementedError:
+            return forms[0] if count == 1 else forms[-1]
+
+    def _duration_subsecond(self, remainder):
+        if self.DURATION_SUBSECOND_IN_SECONDS:
+            count = int(round(remainder))
+            if not count:
+                return None
+            unit = 'second'
+            forms = list(self.DURATION_UNITS.values())[-1][1]
+        else:
+            count = int(round(remainder * self.DURATION_SUBSECOND_DIVISOR))
+            if not count:
+                return None
+            unit = 'millisecond'
+            forms = self.DURATION_SUBSECOND_UNIT
+        return '%s %s' % (self._duration_cardinal(count, unit),
+                          self._duration_pluralize(count, forms))
+
+    def _duration_join(self, parts):
+        if len(parts) < 2:
+            return ''.join(parts)
+        if self.DURATION_AND_WORD:
+            return '%s %s %s' % (', '.join(parts[:-1]),
+                                 self.DURATION_AND_WORD, parts[-1])
+        return ' '.join(parts)
+
+    def to_duration(self, value):
+        value = Decimal(str(value))
+        negative = value < 0
+        value = abs(value)
+
+        whole_seconds = int(value)
+        remainder = value - whole_seconds
+
+        parts = []
+        units = list(self.DURATION_UNITS.items())
+        remaining = whole_seconds
+        for name, (unit_seconds, forms) in units:
+            if unit_seconds > 1:
+                count, remaining = divmod(remaining, unit_seconds)
+            else:
+                count, remaining = remaining, 0
+            if count:
+                parts.append('%s %s' % (
+                    self._duration_cardinal(count, name),
+                    self._duration_pluralize(count, forms)))
+
+        if remainder:
+            subsecond = self._duration_subsecond(remainder)
+            if subsecond:
+                parts.append(subsecond)
+
+        if not parts:
+            name, (_, forms) = units[-1]
+            parts.append('%s %s' % (self._duration_cardinal(0, name),
+                                    self._duration_pluralize(0, forms)))
+
+        out = self._duration_join(parts)
+        if negative:
+            out = '%s %s' % (self.negword.strip(), out)
+        return out
 
     def pluralize(self, n, forms):
         """

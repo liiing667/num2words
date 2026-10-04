@@ -72,6 +72,7 @@ Besides the numerical argument, there are two main optional arguments, ``to:`` a
 * ``ordinal_num``
 * ``year``
 * ``currency``
+* ``duration``
 
 **lang:** The language in which to convert the number. Supported values are:
 
