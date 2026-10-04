@@ -19,13 +19,107 @@ from __future__ import unicode_literals
 
 import math
 from collections import OrderedDict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 
-from .compat import to_s
+from .compat import strtype, to_s
 from .currency import parse_currency_parts, prefix_currency
 
 
-class Num2Word_Base(object):
+class Num2Word_Duration(object):
+    DURATION_UNITS = (
+        (365 * 24 * 60 * 60, ("year", "years"), {}),
+        (30 * 24 * 60 * 60, ("month", "months"), {}),
+        (24 * 60 * 60, ("day", "days"), {}),
+        (60 * 60, ("hour", "hours"), {}),
+        (60, ("minute", "minutes"), {}),
+        (1, ("second", "seconds"), {}),
+    )
+    DURATION_SUBSECOND = (1000, ("millisecond", "milliseconds"), {})
+    DURATION_SEPARATOR = ", "
+    DURATION_CONJUNCTION = " and "
+
+    def _duration_number(self, value):
+        try:
+            value = Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            raise TypeError(self.errmsg_nonnum % value)
+
+        if not value.is_finite():
+            raise TypeError(self.errmsg_nonnum % value)
+        return value
+
+    def _duration_pluralize(self, value, forms):
+        if isinstance(forms, strtype):
+            return forms
+
+        try:
+            return self.pluralize(value, forms)
+        except (AttributeError, NotImplementedError, TypeError):
+            if value == 1:
+                return forms[0]
+            return forms[-1]
+
+    def _duration_segment(self, value, forms, cardinal_kwargs):
+        return "%s %s" % (
+            self.to_cardinal(value, **cardinal_kwargs),
+            self._duration_pluralize(value, forms)
+        )
+
+    def _duration_join(self, segments):
+        if len(segments) < 2:
+            return "".join(segments)
+
+        conjunction = self.DURATION_CONJUNCTION
+        if not conjunction:
+            return self.DURATION_SEPARATOR.join(segments)
+        return (self.DURATION_SEPARATOR.join(segments[:-1]) +
+                conjunction + segments[-1])
+
+    def _duration_negative_word(self):
+        negword = getattr(self, "negword", "minus")
+        if hasattr(self, "select_text"):
+            negword = self.select_text(negword)
+        return to_s(negword).strip()
+
+    def to_duration(self, value, **kwargs):
+        value = self._duration_number(value)
+        is_negative = value < 0
+        value = abs(value)
+
+        seconds = value.to_integral_value(rounding=ROUND_FLOOR)
+        subsecond = value - seconds
+        remaining = int(seconds)
+        segments = []
+
+        for unit_seconds, forms, cardinal_kwargs in self.DURATION_UNITS:
+            amount, remaining = divmod(remaining, unit_seconds)
+            if amount:
+                segments.append(
+                    self._duration_segment(amount, forms, cardinal_kwargs)
+                )
+
+        if subsecond:
+            divisor, forms, cardinal_kwargs = self.DURATION_SUBSECOND
+            amount = subsecond * divisor
+            if amount:
+                segments.append(
+                    self._duration_segment(amount, forms, cardinal_kwargs)
+                )
+
+        if not segments:
+            forms, cardinal_kwargs = (self.DURATION_UNITS[-1][1],
+                                      self.DURATION_UNITS[-1][2])
+            segments.append(self._duration_segment(0, forms, cardinal_kwargs))
+
+        out = self._duration_join(segments)
+        if is_negative:
+            out = "%s %s" % (self._duration_negative_word(), out)
+
+        title = getattr(self, "title", None)
+        return title(out) if callable(title) else out
+
+
+class Num2Word_Base(Num2Word_Duration):
     CURRENCY_FORMS = {}
     CURRENCY_ADJECTIVES = {}
 
